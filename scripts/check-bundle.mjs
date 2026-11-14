@@ -20,7 +20,10 @@ if (initialJs.length === 0) {
 
 let total = 0;
 for (const asset of initialJs) {
-  const path = resolve(dist, `.${asset}`);
+  const relative = asset.includes("/assets/")
+    ? asset.slice(asset.indexOf("/assets/") + 1)
+    : asset.replace(/^\.?\//, "");
+  const path = resolve(dist, relative);
   statSync(path);
   const bytes = gzipSync(readFileSync(path)).length;
   total += bytes;
@@ -31,7 +34,9 @@ const sw = resolve(dist, "sw.js");
 statSync(sw);
 console.log(`service worker: ${(statSync(sw).size / 1024).toFixed(2)} kB`);
 
-console.log(`initial JavaScript: ${(total / 1024).toFixed(2)} kB gzipped (budget 500 kB)`);
+console.log(
+  `initial JavaScript: ${(total / 1024).toFixed(2)} kB gzipped (budget 500 kB)`,
+);
 if (total >= budget) {
   console.error("Initial JavaScript exceeds the 500 kB gzipped budget.");
   process.exit(1);

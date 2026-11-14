@@ -6,9 +6,12 @@ import { SettingsProvider } from "./app/SettingsContext";
 import { ServicesProvider } from "./services/ServicesContext";
 import "./ui/styles.css";
 
+const baseUrl = import.meta.env.BASE_URL;
+const basename = baseUrl.replace(/\/$/, "") || "/";
+
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js");
+    void navigator.serviceWorker.register(`${baseUrl}sw.js`);
   });
 }
 
@@ -16,7 +19,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ServicesProvider>
       <SettingsProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={basename}>
           <App />
         </BrowserRouter>
       </SettingsProvider>

@@ -8,7 +8,11 @@ const pkg = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 ) as { version: string };
 
+const rawBase = process.env.BASE_PATH ?? "/";
+const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -22,7 +26,8 @@ export default defineConfig({
         theme_color: "#f6f2ea",
         background_color: "#f6f2ea",
         display: "standalone",
-        start_url: "/",
+        start_url: base,
+        scope: base,
         icons: [
           {
             src: "favicon.svg",
@@ -34,7 +39,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
-        navigateFallback: "/index.html",
+        navigateFallback: `${base}index.html`,
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: false,

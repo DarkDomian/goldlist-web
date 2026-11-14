@@ -37,16 +37,16 @@ later translations reuse the browser cache. Use Settings → Theme to switch lig
 
 ### Scripts
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the Vite development server. |
-| `npm run build` | Type-check and build the production app. |
-| `npm run preview` | Serve the production build locally. |
-| `npm test` | Run the Vitest unit and component suite. |
-| `npm run test:watch` | Run Vitest in watch mode. |
-| `npm run test:e2e` | Build and run the Playwright smoke tests. |
-| `npm run lint` | Run ESLint. |
-| `npm run typecheck` | Run TypeScript without emitting. |
+| Command                | Purpose                                           |
+| ---------------------- | ------------------------------------------------- |
+| `npm run dev`          | Start the Vite development server.                |
+| `npm run build`        | Type-check and build the production app.          |
+| `npm run preview`      | Serve the production build locally.               |
+| `npm test`             | Run the Vitest unit and component suite.          |
+| `npm run test:watch`   | Run Vitest in watch mode.                         |
+| `npm run test:e2e`     | Build and run the Playwright smoke tests.         |
+| `npm run lint`         | Run ESLint.                                       |
+| `npm run typecheck`    | Run TypeScript without emitting.                  |
 | `npm run check:bundle` | Verify the initial JS stays under 500 kB gzipped. |
 
 Playwright needs a browser once: `npx playwright install chromium`.
@@ -82,7 +82,7 @@ tests/
   app/        Routing, guards, and shell tests
   e2e/        Playwright smoke and offline tests
 scripts/      Production bundle budget check
-docs/         Manual accessibility and mobile checklists
+docs/         Master spec, backlog, and manual accessibility/mobile checklists
 openspec/     Change proposals, specs, design, and task history
 ```
 
@@ -135,8 +135,33 @@ The build output in `dist/` is fully static.
 7. Playwright starts its own preview server; in CI run `npm run test:e2e` after installing
    Chromium. Set `CI=1` to disable server reuse.
 
-No environment variables are required for production. `VITE_E2E=1` swaps in a fake
-translation service for Playwright only and must not be used for a real deployment.
+### GitHub Pages
+
+The repository deploys to
+[`https://darkdomian.github.io/goldlist-web/`](https://darkdomian.github.io/goldlist-web/)
+through `.github/workflows/deploy.yml`. In the repository settings, set
+**Pages → Build and deployment → Source** to **GitHub Actions**.
+
+Because this is a project site, the app is built with `BASE_PATH=/goldlist-web/` so that
+assets, the router, the manifest, and the service worker resolve under the subpath. The
+workflow also copies `index.html` to `404.html`, which provides the SPA fallback for direct
+links such as `/goldlist-web/today`.
+
+To reproduce the Pages build locally:
+
+```sh
+BASE_PATH=/goldlist-web/ npm run build
+npm run preview
+```
+
+Open `http://localhost:4173/goldlist-web/`.
+
+Root deployments (a custom domain or the `darkdomian.github.io` repository) can omit
+`BASE_PATH`; the default base is `/`. An SPA fallback is still required for direct links.
+
+No environment variables are required for a root deployment. `BASE_PATH` only changes the
+public URL path. `VITE_E2E=1` swaps in a fake translation service for Playwright only and
+must not be used for a real deployment.
 
 ## Limitations
 
