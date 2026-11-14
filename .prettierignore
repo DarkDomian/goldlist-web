@@ -1,0 +1,6 @@
+dist
+coverage
+node_modules
+openspec
+.playwright
+package-lock.json
