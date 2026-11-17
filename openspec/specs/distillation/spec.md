@@ -21,7 +21,7 @@ The Distillation view SHALL present waiting cards whose `scheduledFor` is less t
 
 ### Requirement: Distillation card presentation
 
-While testing a card, the system SHALL show the English word, its English examples, and a status indicator for copper, silver, or gold, and SHALL hide the Russian translation until the answer is submitted.
+While testing a card, the system SHALL show a fixed-height preview of the English word, its English examples, and a copper, silver, or gold status indicator, and SHALL hide the Russian translation until the answer is submitted. Overflowing content SHALL fade at the final visible line while remaining available to assistive technology.
 
 #### Scenario: Translation is hidden before submission
 
@@ -32,6 +32,16 @@ While testing a card, the system SHALL show the English word, its English exampl
 
 - **WHEN** a due card is displayed for testing
 - **THEN** the English word, examples, and current status indicator are visible
+
+#### Scenario: Overflow fades during recall
+
+- **WHEN** a due card's content is taller than the fixed preview height
+- **THEN** the final visible line fades and the full content remains available to assistive technology
+
+#### Scenario: Fitting content has no fade
+
+- **WHEN** a due card's content fits within the fixed preview height
+- **THEN** no overflow fade is shown
 
 ### Requirement: Typed Russian answer
 

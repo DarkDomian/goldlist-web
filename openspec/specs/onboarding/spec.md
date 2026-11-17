@@ -35,12 +35,12 @@ The onboarding flow SHALL display Russian as the native language and English as 
 
 ### Requirement: Default settings confirmation
 
-The onboarding flow SHALL present the default 14-calendar-day freeze, midnight cutoff, and theme, and SHALL allow the user to confirm them before finishing.
+The onboarding flow SHALL present the default 14-calendar-day freeze, midnight cutoff, and current theme preference, and SHALL allow the user to confirm them before finishing. The theme preference SHALL be shown as Light, Dark, or System.
 
 #### Scenario: Defaults are visible
 
 - **WHEN** the user reaches the confirmation step
-- **THEN** the flow shows a 14-day freeze, a 00:00 local cutoff, and the current theme
+- **THEN** the flow shows a 14-day freeze, a 00:00 local cutoff, and the current theme as Light, Dark, or System
 
 #### Scenario: Confirming defaults completes onboarding
 
