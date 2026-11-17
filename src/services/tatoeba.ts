@@ -5,6 +5,7 @@ import type { ExampleDraft } from "@/domain/types";
 
 export const TATOEBA_ENDPOINT = "https://api.tatoeba.org/v1/sentences";
 export const MAX_EXAMPLES = 3;
+export const MAX_CANDIDATES = 12;
 const DEFAULT_TIMEOUT_MS = 8_000;
 
 export interface TatoebaOptions {
@@ -58,16 +59,38 @@ function containsStem(sentence: string, word: string): boolean {
     .some((token) => stemWord(token) === stem);
 }
 
+function uniqueSentences(sentences: string[]): string[] {
+  return Array.from(new Set(sentences.map((sentence) => sentence.trim()))).filter(
+    Boolean,
+  );
+}
+
+export function rankCandidates(
+  sentences: string[],
+  word: string,
+  limit = MAX_CANDIDATES,
+): string[] {
+  const unique = uniqueSentences(sentences);
+  const exact = unique.filter((sentence) => containsExact(sentence, word));
+  const exactSet = new Set(exact);
+  const stem = unique.filter(
+    (sentence) => !exactSet.has(sentence) && containsStem(sentence, word),
+  );
+  const stemSet = new Set(stem);
+  const remaining = unique.filter(
+    (sentence) => !exactSet.has(sentence) && !stemSet.has(sentence),
+  );
+
+  return [...exact, ...stem, ...remaining].slice(0, limit);
+}
+
 export function selectExamples(
   sentences: string[],
   word: string,
   limit = MAX_EXAMPLES,
 ): string[] {
-  const unique = Array.from(new Set(sentences.map((sentence) => sentence.trim()))).filter(
-    Boolean,
-  );
-  const exact = unique.filter((sentence) => containsExact(sentence, word));
-  const selected = [...exact];
+  const unique = uniqueSentences(sentences);
+  const selected = unique.filter((sentence) => containsExact(sentence, word));
 
   if (selected.length < limit) {
     for (const sentence of unique) {
@@ -117,7 +140,7 @@ async function fetchSentences(
   }
 }
 
-export async function getExamples(
+export async function getExampleCandidates(
   word: string,
   options: TatoebaOptions = {},
 ): Promise<ExampleDraft[]> {
@@ -142,15 +165,29 @@ export async function getExamples(
 
   try {
     const sentences = await fetchSentences(word, fetchImpl, timeoutMs, limit);
-    const examples = selectExamples(sentences, word);
+    const candidates = rankCandidates(sentences, word);
     if (database) {
-      await putCachedExamples(database, queryKey, examples, now);
+      await putCachedExamples(database, queryKey, candidates, now);
     }
-    return examples.map((text) => ({ text, source: "tatoeba" }));
+    return candidates.map((text) => ({ text, source: "tatoeba" }));
   } catch {
     const stale = database
       ? await getCachedExamples(database, queryKey, now, true)
       : undefined;
     return (stale ?? []).map((text) => ({ text, source: "tatoeba" }));
   }
+}
+
+export async function getExamples(
+  word: string,
+  options: TatoebaOptions = {},
+): Promise<ExampleDraft[]> {
+  const candidates = await getExampleCandidates(word, options);
+  const selected = new Set(
+    selectExamples(
+      candidates.map((candidate) => candidate.text),
+      word,
+    ),
+  );
+  return candidates.filter((candidate) => selected.has(candidate.text));
 }

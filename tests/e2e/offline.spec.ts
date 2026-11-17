@@ -80,6 +80,6 @@ test("adds, distills, and browses the archive offline", async ({ page, context }
   await expect(
     page.getByRole("heading", { name: "Everything you have gathered" }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "offline" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open card offline" })).toBeVisible();
   await expect(page.getByText("offline (ru)")).not.toBeVisible();
 });

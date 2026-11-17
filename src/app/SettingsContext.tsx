@@ -24,9 +24,29 @@ interface SettingsContextValue {
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
+export function systemPrefersDark(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+}
+
+export function resolveTheme(
+  theme: Theme,
+  prefersDark: boolean = systemPrefersDark(),
+): "light" | "dark" {
+  if (theme === "system") {
+    return prefersDark ? "dark" : "light";
+  }
+  return theme;
+}
+
 export function applyTheme(theme: Theme): void {
+  const resolved = resolveTheme(theme);
   if (typeof document !== "undefined") {
-    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.style.colorScheme = resolved;
   }
   try {
     localStorage.setItem("goldlist-theme", theme);
@@ -52,11 +72,34 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
   }, [database]);
 
+  const theme = liveSettings?.theme;
+
   useEffect(() => {
-    if (liveSettings) {
-      applyTheme(liveSettings.theme);
+    if (!theme) {
+      return;
     }
-  }, [liveSettings]);
+
+    applyTheme(theme);
+
+    if (
+      theme !== "system" ||
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
+      return;
+    }
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => applyTheme("system");
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, [theme]);
 
   const updateSettings = useCallback(
     async (patch: Partial<Omit<Settings, "id">>) => {

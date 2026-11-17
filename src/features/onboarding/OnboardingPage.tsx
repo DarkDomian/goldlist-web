@@ -86,7 +86,13 @@ export default function OnboardingPage() {
               </div>
               <div>
                 <dt>Theme</dt>
-                <dd>{settings.theme === "dark" ? "Dark" : "Light"}</dd>
+                <dd>
+                  {settings.theme === "dark"
+                    ? "Dark"
+                    : settings.theme === "system"
+                      ? "System"
+                      : "Light"}
+                </dd>
               </div>
             </dl>
             {error ? (

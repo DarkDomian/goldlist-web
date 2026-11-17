@@ -71,7 +71,11 @@ export default function DistillationPage() {
           </p>
         </header>
 
-        <CardView card={feedback.card} examples={feedback.card.examples} />
+        <CardView
+          card={feedback.card}
+          examples={feedback.card.examples}
+          variant="preview"
+        />
         <div className={`feedback feedback--${feedback.isCorrect ? "good" : "soft"}`}>
           <p>
             <strong>Your answer:</strong> {feedback.answer || "—"}
@@ -122,7 +126,12 @@ export default function DistillationPage() {
         </p>
       </header>
 
-      <CardView card={current} examples={current.examples} showTranslation={false} />
+      <CardView
+        card={current}
+        examples={current.examples}
+        showTranslation={false}
+        variant="preview"
+      />
 
       <form
         className="answer-form"

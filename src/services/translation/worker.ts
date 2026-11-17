@@ -1,7 +1,15 @@
 import { pipeline } from "@huggingface/transformers";
-import type { TranslationRequest, TranslationResponse } from "./types";
+import type {
+  TranslationRequest,
+  TranslationResponse,
+  TranslationStatus,
+} from "./types";
 import type { GeneratorLike } from "./workerCore";
-import { TRANSLATION_MODEL_ID, translateWithGenerator } from "./workerCore";
+import {
+  loadTranslationModel,
+  TRANSLATION_MODEL_ID,
+  translateWithGenerator,
+} from "./workerCore";
 
 type WorkerScope = {
   onmessage: ((event: MessageEvent<TranslationRequest>) => void) | null;
@@ -15,31 +23,30 @@ function post(message: TranslationResponse): void {
   scope.postMessage(message);
 }
 
+function postStatus(status: TranslationStatus): void {
+  post({ type: "status", ...status });
+}
+
 function hasWebGpu(): boolean {
   return typeof navigator !== "undefined" && "gpu" in navigator;
 }
 
-async function getGenerator(id: string): Promise<GeneratorLike> {
+async function getGenerator(): Promise<GeneratorLike> {
   if (generatorPromise) {
     return generatorPromise;
   }
 
-  const webgpu = hasWebGpu();
-  post({ type: "status", id, phase: "loading" });
-
-  generatorPromise = pipeline("text-generation", TRANSLATION_MODEL_ID, {
-    device: webgpu ? "webgpu" : "wasm",
-    dtype: webgpu ? "q4f16" : "q4",
-    progress_callback: (progress: { progress?: number; status?: string; file?: string }) => {
-      post({
-        type: "status",
-        id,
-        phase: "downloading",
-        progress: typeof progress.progress === "number" ? progress.progress : undefined,
-        message: progress.status ?? progress.file,
-      });
-    },
-  }) as unknown as Promise<GeneratorLike>;
+  postStatus({ phase: "queued" });
+  generatorPromise = loadTranslationModel({
+    hasWebGpu: hasWebGpu(),
+    load: (device, onProgress) =>
+      pipeline("text-generation", TRANSLATION_MODEL_ID, {
+        device,
+        dtype: device === "webgpu" ? "q4f16" : "q4",
+        progress_callback: onProgress,
+      }) as unknown as Promise<GeneratorLike>,
+    onStatus: postStatus,
+  });
 
   return generatorPromise;
 }
@@ -51,8 +58,8 @@ scope.onmessage = async (event) => {
   }
 
   try {
-    const generator = await getGenerator(message.id);
-    post({ type: "status", id: message.id, phase: "translating" });
+    const generator = await getGenerator();
+    postStatus({ phase: "translating" });
     const translation = await translateWithGenerator(generator, message.text);
     post({ type: "result", id: message.id, translation });
   } catch (error) {

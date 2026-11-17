@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useSettings } from "@/app/SettingsContext";
 import { listCardsWithExamples } from "@/data/cardRepository";
 import { selectCurrentDay } from "@/domain/selectors";
 import { useServices } from "@/services/ServicesContext";
@@ -10,6 +11,7 @@ import { AddCardDialog } from "@/features/add-card/AddCardDialog";
 
 export default function TodayPage() {
   const { database } = useServices();
+  const { settings } = useSettings();
   const cards = useLiveQuery(() => listCardsWithExamples(database), [database]);
   const [adding, setAdding] = useState(false);
 
@@ -48,12 +50,19 @@ export default function TodayPage() {
               card={card}
               examples={card.examples}
               to={`/card/${card.id}`}
+              variant="preview"
             />
           ))}
         </div>
       )}
 
-      {adding ? <AddCardDialog open onClose={() => setAdding(false)} /> : null}
+      {adding ? (
+        <AddCardDialog
+          open
+          exampleSelectionMode={settings.exampleSelectionMode}
+          onClose={() => setAdding(false)}
+        />
+      ) : null}
     </div>
   );
 }

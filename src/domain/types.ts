@@ -1,4 +1,6 @@
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "system";
+
+export type ExampleSelectionMode = "auto" | "manual";
 
 export type CardStatus = "copper" | "silver" | "gold" | "learned" | "unlearned";
 
@@ -11,6 +13,7 @@ export interface Settings {
   cutoffTime: "00:00";
   freezeDays: 14;
   theme: Theme;
+  exampleSelectionMode: ExampleSelectionMode;
   onboardingCompleted: boolean;
 }
 
@@ -21,6 +24,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cutoffTime: "00:00",
   freezeDays: 14,
   theme: "light",
+  exampleSelectionMode: "auto",
   onboardingCompleted: false,
 };
 

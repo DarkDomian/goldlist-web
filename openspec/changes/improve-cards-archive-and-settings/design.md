@@ -83,7 +83,7 @@ Add `src/data/portability.ts` (or equivalent) with a pure snapshot builder/parse
 {
   "schemaVersion": 1,
   "exportedAt": "ISO timestamp",
-  "appVersion": "0.1.0",
+  "appVersion": "0.1.1",
   "payload": {
     "settings": {},
     "cards": [],

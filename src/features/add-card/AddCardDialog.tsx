@@ -1,44 +1,42 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { createCard, findCardByWord } from "@/data/cardRepository";
 import { DuplicateWordError } from "@/data/errors";
-import type { ExampleDraft } from "@/domain/types";
+import type { ExampleDraft, ExampleSelectionMode } from "@/domain/types";
 import { useServices } from "@/services/ServicesContext";
-import type { TranslationProgress } from "@/services/translation/types";
+import { selectExamples } from "@/services/tatoeba";
+import { TranslationStatusBar } from "@/ui/TranslationStatusBar";
 
 type Phase = "idle" | "translating" | "ready" | "manual" | "saving";
 
-function progressText(progress: TranslationProgress | null): string {
-  if (!progress) {
-    return "Preparing translation…";
-  }
-  if (progress.phase === "loading") {
-    return "Loading the translation model…";
-  }
-  if (progress.phase === "downloading") {
-    const percent =
-      typeof progress.progress === "number" ? ` ${Math.round(progress.progress)}%` : "";
-    return `Downloading the translation model${percent}…`;
-  }
-  if (progress.phase === "translating") {
-    return "Translating…";
-  }
-  return "Preparing translation…";
+function sameExampleText(a: string, b: string): boolean {
+  return a.trim().toLocaleLowerCase("en") === b.trim().toLocaleLowerCase("en");
+}
+
+function sameExample(a: ExampleDraft, b: ExampleDraft): boolean {
+  return a.source === b.source && sameExampleText(a.text, b.text);
 }
 
 export function AddCardDialog({
   open,
   onClose,
+  exampleSelectionMode = "auto",
 }: {
   open: boolean;
   onClose: () => void;
+  exampleSelectionMode?: ExampleSelectionMode;
 }) {
-  const { database, translation, examples: fetchExamples } = useServices();
+  const { database, translation, examples: fetchExampleCandidates } = useServices();
   const [word, setWord] = useState("");
   const [translationText, setTranslationText] = useState("");
   const [examples, setExamples] = useState<ExampleDraft[]>([]);
+  const [candidates, setCandidates] = useState<ExampleDraft[]>([]);
+  const [customExample, setCustomExample] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
-  const [progress, setProgress] = useState<TranslationProgress | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const status = useSyncExternalStore(
+    translation.subscribeStatus,
+    translation.getStatus,
+  );
   const [duplicate, setDuplicate] = useState(false);
 
   if (!open) {
@@ -55,7 +53,8 @@ export function AddCardDialog({
     setMessage(null);
     setDuplicate(false);
     setPhase("translating");
-    setProgress(null);
+    setCandidates([]);
+    setExamples([]);
 
     const existing = await findCardByWord(database, trimmed).catch(() => undefined);
     if (existing) {
@@ -64,18 +63,30 @@ export function AddCardDialog({
       return;
     }
 
-    const examplesPromise = fetchExamples(trimmed).catch(() => [] as ExampleDraft[]);
+    const examplesPromise = fetchExampleCandidates(trimmed).catch(
+      () => [] as ExampleDraft[],
+    );
     let translated: string | null = null;
     let translationError = false;
 
     try {
-      translated = await translation.translate(trimmed, setProgress);
+      translated = await translation.translate(trimmed);
     } catch {
       translationError = true;
     }
 
-    const fetchedExamples = await examplesPromise;
-    setExamples(fetchedExamples);
+    const fetchedCandidates = await examplesPromise;
+    setCandidates(fetchedCandidates);
+
+    if (exampleSelectionMode === "auto") {
+      const selected = new Set(
+        selectExamples(
+          fetchedCandidates.map((candidate) => candidate.text),
+          trimmed,
+        ),
+      );
+      setExamples(fetchedCandidates.filter((candidate) => selected.has(candidate.text)));
+    }
 
     if (translationError || !translated) {
       setMessage("Automatic translation failed. Type the Russian translation to continue.");
@@ -85,6 +96,50 @@ export function AddCardDialog({
 
     setTranslationText(translated);
     setPhase("ready");
+  };
+
+  const toggleCandidate = (candidate: ExampleDraft) => {
+    setMessage(null);
+    setExamples((current) => {
+      const alreadySelected = current.some(
+        (example) => sameExample(example, candidate),
+      );
+      if (alreadySelected) {
+        return current.filter((example) => !sameExample(example, candidate));
+      }
+
+      const selectedTatoeba = current.filter(
+        (example) => example.source === "tatoeba",
+      ).length;
+      if (selectedTatoeba >= 3) {
+        setMessage("You can choose up to three Tatoeba examples.");
+        return current;
+      }
+
+      return [...current, candidate];
+    });
+  };
+
+  const addCustomExample = () => {
+    const text = customExample.trim();
+    if (!text) {
+      setMessage("Enter an example sentence.");
+      return;
+    }
+    if ([...examples, ...candidates].some((example) => sameExampleText(example.text, text))) {
+      setMessage("That example already exists.");
+      return;
+    }
+
+    setExamples((current) => [...current, { text, source: "user" }]);
+    setCustomExample("");
+    setMessage(null);
+  };
+
+  const removeExample = (target: ExampleDraft) => {
+    setExamples((current) =>
+      current.filter((example) => !sameExample(example, target)),
+    );
   };
 
   const save = async () => {
@@ -114,6 +169,8 @@ export function AddCardDialog({
     }
   };
 
+  const editing = phase === "ready" || phase === "manual" || phase === "saving";
+
   return (
     <div className="dialog-backdrop">
       <div className="dialog dialog--sheet" role="dialog" aria-modal="true" aria-labelledby="add-card-title">
@@ -130,7 +187,7 @@ export function AddCardDialog({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (phase === "ready" || phase === "manual") {
+            if (editing) {
               void save();
             } else {
               void findTranslation();
@@ -148,16 +205,11 @@ export function AddCardDialog({
             />
           </label>
 
-          {phase === "translating" ? (
-            <div className="translation-progress" role="status" aria-live="polite">
-              <div className="translation-progress__bar">
-                <span style={{ width: `${Math.round(progress?.progress ?? 12)}%` }} />
-              </div>
-              <p>{progressText(progress)}</p>
-            </div>
+          {phase === "translating" && status.phase !== "ready" ? (
+            <TranslationStatusBar status={status} />
           ) : null}
 
-          {phase === "ready" || phase === "manual" || phase === "saving" ? (
+          {editing ? (
             <label className="field">
               <span>Russian translation</span>
               <input
@@ -169,12 +221,81 @@ export function AddCardDialog({
             </label>
           ) : null}
 
+          {editing && exampleSelectionMode === "manual" ? (
+            <div className="add-card__candidates">
+              <p className="eyebrow">Choose examples</p>
+              <p className="hint">
+                Choose your own examples for better control. You can select up to three.
+              </p>
+              {candidates.length > 0 ? (
+                <div
+                  className="add-card__candidate-list"
+                  role="group"
+                  aria-label="Example candidates"
+                >
+                  {candidates.map((candidate) => {
+                    const selected = examples.some((example) =>
+                      sameExample(example, candidate),
+                    );
+                    return (
+                      <button
+                        key={candidate.text}
+                        type="button"
+                        className={`candidate${selected ? " candidate--selected" : ""}`}
+                        aria-pressed={selected}
+                        onClick={() => toggleCandidate(candidate)}
+                        disabled={phase === "saving"}
+                      >
+                        {candidate.text}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="hint">No Tatoeba candidates were found. You can still add your own.</p>
+              )}
+            </div>
+          ) : null}
+
+          {editing ? (
+            <div className="add-card__custom">
+              <label className="field">
+                <span>Add your own example</span>
+                <input
+                  value={customExample}
+                  onChange={(event) => setCustomExample(event.target.value)}
+                  placeholder="Write an English sentence"
+                  disabled={phase === "saving"}
+                />
+              </label>
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                onClick={addCustomExample}
+                disabled={phase === "saving"}
+              >
+                Add example
+              </button>
+            </div>
+          ) : null}
+
           {examples.length > 0 ? (
             <div className="add-card__examples">
-              <p className="eyebrow">Examples</p>
+              <p className="eyebrow">Selected examples</p>
               <ul>
                 {examples.map((example) => (
-                  <li key={example.text}>{example.text}</li>
+                  <li key={`${example.source}-${example.text}`}>
+                    <span>{example.text}</span>
+                    <button
+                      type="button"
+                      className="example-remove"
+                      onClick={() => removeExample(example)}
+                      aria-label={`Remove example: ${example.text}`}
+                      disabled={phase === "saving"}
+                    >
+                      ×
+                    </button>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -200,11 +321,11 @@ export function AddCardDialog({
               className="button button--primary"
               disabled={phase === "translating" || phase === "saving"}
             >
-              {phase === "ready" || phase === "manual"
-                ? "Save card"
-                : phase === "saving"
+              {editing
+                ? phase === "saving"
                   ? "Saving…"
-                  : "Translate"}
+                  : "Save card"
+                : "Translate"}
             </button>
           </div>
         </form>

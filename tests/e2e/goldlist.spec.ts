@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
 async function mockExamples(page: Page) {
@@ -67,6 +68,24 @@ test("onboarding, adding a word, duplicate blocking, and theme persistence", asy
   await onboard(page);
   await addWord(page, "curious");
 
+  const previewPadding = await page
+    .locator(".card--preview .card__body")
+    .evaluate((node) => {
+      const styles = getComputedStyle(node);
+      return {
+        top: styles.paddingTop,
+        right: styles.paddingRight,
+        bottom: styles.paddingBottom,
+        left: styles.paddingLeft,
+      };
+    });
+  expect(previewPadding).toEqual({
+    top: "22px",
+    right: "22px",
+    bottom: "20px",
+    left: "22px",
+  });
+
   await page.getByRole("button", { name: "Add a word" }).click();
   await page.getByLabel("English word or phrase").fill("CURIOUS");
   await page.getByRole("button", { name: "Translate" }).click();
@@ -81,6 +100,21 @@ test("onboarding, adding a word, duplicate blocking, and theme persistence", asy
   await page.reload();
   await expect(page.getByRole("heading", { name: "Make it comfortable" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.getByRole("button", { name: "System" }).click();
+  await expect(page.getByRole("button", { name: "System" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.waitForFunction(() => localStorage.getItem("goldlist-theme") === "system");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Make it comfortable" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await page.evaluate(() => localStorage.getItem("goldlist-theme"))).toBe(
+    "system",
+  );
 });
 
 test("distillation pass and fail, archive, re-learn, and delete", async ({ page }) => {
@@ -103,7 +137,9 @@ test("distillation pass and fail, archive, re-learn, and delete", async ({ page 
   await page.getByRole("button", { name: "Check answer" }).click();
   await expect(page.getByRole("heading", { name: "Not yet." })).toBeVisible();
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByRole("heading", { name: "Nothing due right now" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Nothing due right now" }),
+  ).toBeVisible();
 
   await page.getByRole("link", { name: "Archive" }).click();
   await expect(
@@ -111,7 +147,7 @@ test("distillation pass and fail, archive, re-learn, and delete", async ({ page 
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Learned" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Waiting" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "alpha" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open card alpha" })).toBeVisible();
   await expect(page.getByText("alpha (ru)")).not.toBeVisible();
   await expect(page.getByRole("img", { name: "Waiting silver card" })).toBeVisible();
 
@@ -128,7 +164,7 @@ test("distillation pass and fail, archive, re-learn, and delete", async ({ page 
   await expect(
     page.getByRole("heading", { name: "Everything you have gathered" }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "alpha" })).not.toBeVisible();
+  await expect(page.getByRole("link", { name: "Open card alpha" })).not.toBeVisible();
 });
 
 test("midnight cutoff moves the Current Day into the archive", async ({ page }) => {
@@ -155,8 +191,81 @@ test("mobile layout keeps actions reachable and avoids horizontal overflow", asy
 
   await expect(page.getByRole("button", { name: "Add a word" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
-  const fits = await page.evaluate(
-    () => document.documentElement.scrollWidth <= window.innerWidth + 1,
-  );
-  expect(fits).toBe(true);
+
+  for (const [link, heading] of [
+    ["Archive", "Everything you have gathered"],
+    ["Settings", "Make it comfortable"],
+    ["Today", "Words from today"],
+  ] as const) {
+    await page.getByRole("link", { name: link }).click();
+    await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+    await expect(page.getByRole("main")).toBeFocused();
+
+    const layout = await page.evaluate(() => {
+      const shell = document.querySelector(".app-shell");
+      const nav = document.querySelector(".bottom-nav");
+      if (!shell || !nav) {
+        return null;
+      }
+      const shellRect = shell.getBoundingClientRect();
+      const navRect = nav.getBoundingClientRect();
+      return {
+        fits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+        shellFillsViewport: shellRect.height >= window.innerHeight - 1,
+        paddingCoversNav:
+          Number.parseFloat(getComputedStyle(shell).paddingBottom) >=
+          window.innerHeight - navRect.top - 1,
+        navInsideViewport: navRect.bottom <= window.innerHeight + 1,
+      };
+    });
+
+    expect(layout).toEqual({
+      fits: true,
+      shellFillsViewport: true,
+      paddingCoversNav: true,
+      navInsideViewport: true,
+    });
+  }
+});
+
+test("export/import round trip replaces data and downloads a backup", async ({
+  page,
+}) => {
+  await onboard(page);
+  await addWord(page, "portable");
+
+  await page.getByRole("link", { name: "Settings" }).click();
+  const exportDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export data" }).click();
+  const exportDownload = await exportDownloadPromise;
+  const exportPath = await exportDownload.path();
+  expect(exportPath).toBeTruthy();
+  const exported = JSON.parse(await readFile(exportPath!, "utf8")) as {
+    schemaVersion: number;
+    payload: { cards: Array<{ word: string }> };
+  };
+  expect(exported.schemaVersion).toBe(1);
+  expect(exported.payload.cards.map((card) => card.word)).toContain("portable");
+
+  await page.getByRole("link", { name: "Today" }).click();
+  await addWord(page, "extra");
+  await page.getByRole("link", { name: "Settings" }).click();
+  await page.getByLabel("Import data file").setInputFiles(exportPath!);
+  await expect(page.getByText("Ready to import")).toBeVisible();
+
+  await page.getByRole("button", { name: "Replace all data" }).click();
+  const backupDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Replace and download backup" }).click();
+  const backupDownload = await backupDownloadPromise;
+  const backupPath = await backupDownload.path();
+  expect(backupPath).toBeTruthy();
+  const backup = JSON.parse(await readFile(backupPath!, "utf8")) as {
+    payload: { cards: Array<{ word: string }> };
+  };
+  expect(backup.payload.cards.map((card) => card.word)).toContain("extra");
+  await expect(page.getByText(/Imported 1 settings, 1 cards/)).toBeVisible();
+
+  await page.getByRole("link", { name: "Today" }).click();
+  await expect(page.getByRole("heading", { name: "portable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "extra" })).not.toBeVisible();
 });

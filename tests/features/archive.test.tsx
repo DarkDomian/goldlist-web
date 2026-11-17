@@ -1,6 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import ArchivePage from "@/features/archive/ArchivePage";
+import CardDetailPage from "@/features/card-detail/CardDetailPage";
 import { createCard } from "@/data/cardRepository";
 import type { GoldlistDatabase } from "@/data/db";
 import type { CardStatus } from "@/domain/types";
@@ -39,7 +42,12 @@ function renderArchive() {
     renderProviders({
       services: makeServices({ database }),
       initialEntries: ["/archive"],
-      children: <ArchivePage />,
+      children: (
+        <Routes>
+          <Route path="/archive" element={<ArchivePage />} />
+          <Route path="/card/:id" element={<CardDetailPage />} />
+        </Routes>
+      ),
     }),
   );
 }
@@ -63,14 +71,42 @@ describe("ArchivePage", () => {
     expect(headings).toEqual(["Learned", "Unlearned", "Waiting"]);
   });
 
-  it("keeps Learned translations hidden and shows unlearned translations", async () => {
+  it("renders word-only chips with wrapping markup", async () => {
     await seed("learnedword", "learned", 1);
     await seed("unlearnedword", "unlearned", 2);
     renderArchive();
 
-    expect(await screen.findByText("learnedword")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open card learnedword" })).toHaveClass(
+      "archive-chip",
+    );
+    expect(screen.getByRole("link", { name: "Open card unlearnedword" })).toHaveClass(
+      "archive-chip",
+    );
     expect(screen.queryByText("learnedword translation")).not.toBeInTheDocument();
-    expect(screen.getByText("unlearnedword translation")).toBeInTheDocument();
+    expect(screen.queryByText("unlearnedword translation")).not.toBeInTheDocument();
+    expect(screen.queryByText("An example with learnedword.")).not.toBeInTheDocument();
+    expect(document.querySelector(".archive-chip-list")).toBeInTheDocument();
+  });
+
+  it("keeps translation and examples available in card detail", async () => {
+    await seed("unlearnedword", "unlearned", 2);
+    renderArchive();
+
+    await userEvent.click(
+      await screen.findByRole("link", { name: "Open card unlearnedword" }),
+    );
+    expect(await screen.findByText("unlearnedword translation")).toBeInTheDocument();
+    expect(screen.getByText("An example with unlearnedword.")).toBeInTheDocument();
+  });
+
+  it("keeps learned translations hidden in detail", async () => {
+    await seed("learnedword", "learned", 1);
+    renderArchive();
+    await userEvent.click(
+      await screen.findByRole("link", { name: "Open card learnedword" }),
+    );
+    expect(await screen.findByRole("heading", { level: 1, name: "learnedword" })).toBeInTheDocument();
+    expect(screen.queryByText("learnedword translation")).not.toBeInTheDocument();
   });
 
   it("hides empty blocks", async () => {

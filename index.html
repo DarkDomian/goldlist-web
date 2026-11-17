@@ -12,9 +12,16 @@
     <script>
       (() => {
         try {
-          const theme = localStorage.getItem("goldlist-theme");
-          if (theme === "dark" || theme === "light") {
-            document.documentElement.dataset.theme = theme;
+          const preference = localStorage.getItem("goldlist-theme");
+          const resolved =
+            preference === "system"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : preference;
+          if (resolved === "dark" || resolved === "light") {
+            document.documentElement.dataset.theme = resolved;
+            document.documentElement.style.colorScheme = resolved;
           }
         } catch {
           // Storage can be unavailable in private contexts.

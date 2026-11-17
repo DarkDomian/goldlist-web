@@ -58,12 +58,25 @@ describe("TodayPage", () => {
     await screen.findByText("Words from today");
     await addWord("curious");
 
-    expect(await screen.findByText("curious")).toBeInTheDocument();
+    const word = await screen.findByRole("heading", { name: "curious" });
+    expect(word.closest("article")).toHaveClass("card--preview");
     expect(screen.getByText("curious (перевод)")).toBeInTheDocument();
     expect(
       screen.getByText("An example sentence with curious."),
     ).toBeInTheDocument();
     expect(await database.cards.count()).toBe(1);
+  });
+
+  it("keeps the Add button above the card list", async () => {
+    renderToday();
+    await screen.findByText("Words from today");
+    await addWord("curious");
+
+    const addButton = screen.getByRole("button", { name: "Add a word" });
+    const card = screen.getByRole("heading", { name: "curious" }).closest("article")!;
+    expect(
+      addButton.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("blocks duplicate words from the Current Day", async () => {

@@ -1,13 +1,26 @@
-export type TranslationPhase = "loading" | "downloading" | "ready" | "translating";
+export type TranslationPhase =
+  | "queued"
+  | "downloading"
+  | "initializing"
+  | "ready"
+  | "translating"
+  | "error";
 
-export interface TranslationProgress {
+export interface TranslationStatus {
   phase: TranslationPhase;
   progress?: number;
   message?: string;
 }
 
+export type TranslationProgress = TranslationStatus;
+
 export interface TranslationService {
-  translate(text: string, onProgress?: (progress: TranslationProgress) => void): Promise<string>;
+  translate(
+    text: string,
+    onProgress?: (progress: TranslationProgress) => void,
+  ): Promise<string>;
+  getStatus(): TranslationStatus;
+  subscribeStatus(listener: (status: TranslationStatus) => void): () => void;
   dispose(): void;
 }
 
@@ -20,7 +33,6 @@ export interface TranslationRequest {
 export type TranslationResponse =
   | {
       type: "status";
-      id: string;
       phase: TranslationPhase;
       progress?: number;
       message?: string;

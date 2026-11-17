@@ -8,7 +8,10 @@ import {
   type AppServices,
 } from "@/services/ServicesContext";
 import { AsyncMutex } from "@/services/scheduler";
-import type { TranslationService } from "@/services/translation/types";
+import type {
+  TranslationService,
+  TranslationStatus,
+} from "@/services/translation/types";
 
 let databaseCounter = 0;
 
@@ -18,12 +21,33 @@ export function makeTestDatabase(): GoldlistDatabase {
 }
 
 export function makeTranslation(translation = "перевод"): TranslationService {
+  let status: TranslationStatus = { phase: "queued" };
+  const listeners = new Set<(next: TranslationStatus) => void>();
+  const setStatus = (next: TranslationStatus) => {
+    status = next;
+    for (const listener of listeners) {
+      listener(next);
+    }
+  };
   return {
     async translate(text, onProgress) {
+      setStatus({ phase: "queued" });
+      onProgress?.({ phase: "queued" });
+      setStatus({ phase: "translating" });
       onProgress?.({ phase: "translating" });
+      setStatus({ phase: "ready" });
       return `${text} (${translation})`;
     },
-    dispose() {},
+    getStatus: () => status,
+    subscribeStatus(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    dispose() {
+      listeners.clear();
+    },
   };
 }
 

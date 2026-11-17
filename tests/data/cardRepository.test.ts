@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GoldlistDatabase } from "@/data/db";
 import {
+  addCustomExample,
   createCard,
   deleteCardCascade,
+  deleteCustomExample,
   findCardByWord,
   getAttemptsForCard,
   getCardWithExamples,
@@ -10,8 +12,13 @@ import {
   relearnCard,
   submitDistillation,
   updateCardTranslation,
+  updateCustomExample,
 } from "@/data/cardRepository";
-import { DuplicateWordError } from "@/data/errors";
+import {
+  DuplicateExampleError,
+  DuplicateWordError,
+  EmptyExampleError,
+} from "@/data/errors";
 import { makeTestDatabase } from "../helpers";
 
 let database: GoldlistDatabase;
@@ -71,6 +78,45 @@ describe("cardRepository", () => {
     expect(relearned.status).toBe("copper");
     expect(relearned.scheduledFor).toBeNull();
     expect(await getAttemptsForCard(database, card.id)).toHaveLength(1);
+    expect(await database.examples.where("cardId").equals(card.id).count()).toBe(1);
+  });
+
+  it("adds, edits, and deletes custom examples", async () => {
+    const card = await createSample();
+    const added = await addCustomExample(database, card.id, "  My own sentence.  ");
+    expect(added).toMatchObject({ text: "My own sentence.", source: "user" });
+
+    const updated = await updateCustomExample(database, added.id, "  Edited sentence. ");
+    expect(updated.text).toBe("Edited sentence.");
+
+    const withExamples = await getCardWithExamples(database, card.id);
+    expect(withExamples?.examples[0]).toMatchObject({
+      text: "Edited sentence.",
+      source: "user",
+    });
+
+    await deleteCustomExample(database, added.id);
+    expect(await database.examples.get(added.id)).toBeUndefined();
+  });
+
+  it("rejects empty and duplicate custom examples", async () => {
+    const card = await createSample();
+    await expect(addCustomExample(database, card.id, "   ")).rejects.toBeInstanceOf(
+      EmptyExampleError,
+    );
+    await expect(
+      addCustomExample(database, card.id, "A CURIOUS CAT WATCHED US."),
+    ).rejects.toBeInstanceOf(DuplicateExampleError);
+  });
+
+  it("sorts user examples before Tatoeba examples", async () => {
+    const card = await createSample();
+    await addCustomExample(database, card.id, "My own sentence.");
+    const withExamples = await getCardWithExamples(database, card.id);
+    expect(withExamples?.examples.map((example) => example.source)).toEqual([
+      "user",
+      "tatoeba",
+    ]);
   });
 
   it("deletes the card, examples, and attempts together", async () => {

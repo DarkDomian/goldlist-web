@@ -93,6 +93,8 @@ describe("AppShell", () => {
 
     expect(await screen.findByTestId("due-badge")).toHaveTextContent("1");
     expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Skip to content" })).not.toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveAttribute("tabindex", "-1");
 
     await database.cards.update(card.id, { status: "learned" });
     await waitFor(() => expect(screen.queryByTestId("due-badge")).not.toBeInTheDocument());

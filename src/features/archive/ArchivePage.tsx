@@ -2,7 +2,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { listCardsWithExamples } from "@/data/cardRepository";
 import { hasArchiveContent, selectArchive } from "@/domain/selectors";
 import { useServices } from "@/services/ServicesContext";
-import { CardView, WaitingCard } from "@/ui/CardView";
+import { ArchiveChip } from "@/ui/ArchiveChip";
+import { WaitingCard } from "@/ui/CardView";
 import { EmptyState } from "@/ui/EmptyState";
 
 export default function ArchivePage() {
@@ -42,15 +43,9 @@ export default function ArchivePage() {
                 <h2 id="learned-heading">Learned</h2>
                 <span>{blocks.learned.length}</span>
               </div>
-              <div className="card-list">
+              <div className="archive-chip-list">
                 {blocks.learned.map((card) => (
-                  <CardView
-                    key={card.id}
-                    card={card}
-                    examples={card.examples}
-                    showTranslation={false}
-                    to={`/card/${card.id}`}
-                  />
+                  <ArchiveChip key={card.id} card={card} />
                 ))}
               </div>
             </section>
@@ -62,14 +57,9 @@ export default function ArchivePage() {
                 <h2 id="unlearned-heading">Unlearned</h2>
                 <span>{blocks.unlearned.length}</span>
               </div>
-              <div className="card-list">
+              <div className="archive-chip-list">
                 {blocks.unlearned.map((card) => (
-                  <CardView
-                    key={card.id}
-                    card={card}
-                    examples={card.examples}
-                    to={`/card/${card.id}`}
-                  />
+                  <ArchiveChip key={card.id} card={card} />
                 ))}
               </div>
             </section>
@@ -81,7 +71,7 @@ export default function ArchivePage() {
                 <h2 id="waiting-heading">Waiting</h2>
                 <span>{blocks.waiting.length}</span>
               </div>
-              <div className="waiting-list">
+              <div className="waiting-chip-list">
                 {blocks.waiting.map((card) => (
                   <WaitingCard key={card.id} status={card.status} />
                 ))}

@@ -4,7 +4,7 @@ import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import OnboardingPage from "@/features/onboarding/OnboardingPage";
 import type { GoldlistDatabase } from "@/data/db";
-import { getSettings } from "@/data/settingsRepository";
+import { getSettings, updateSettings } from "@/data/settingsRepository";
 import { makeServices, renderProviders } from "../helpers";
 
 let database: GoldlistDatabase;
@@ -49,6 +49,13 @@ describe("OnboardingPage", () => {
     expect(screen.getByText("00:00 local time")).toBeInTheDocument();
     expect(screen.getByText("Light")).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("shows the system theme preference", async () => {
+    await updateSettings(database, { theme: "system" });
+    renderOnboarding();
+    await userEvent.click(await screen.findByRole("button", { name: "Continue" }));
+    expect(screen.getByText("System")).toBeInTheDocument();
   });
 
   it("persists completion and navigates to Current Day", async () => {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { listCards } from "@/data/cardRepository";
@@ -6,6 +6,7 @@ import { selectDue } from "@/domain/selectors";
 import { useServices } from "@/services/ServicesContext";
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { useNow } from "@/ui/useNow";
+import { RouteEffects } from "./RouteEffects";
 
 const navItems = [
   { to: "/today", label: "Today" },
@@ -23,12 +24,11 @@ export function useDueCount(): number {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const dueCount = useDueCount();
+  const mainRef = useRef<HTMLElement>(null);
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main-content">
-        Skip to content
-      </a>
+      <RouteEffects mainRef={mainRef} />
       <header className="app-header">
         <NavLink to="/today" className="app-header__brand">
           <span className="app-header__mark" aria-hidden="true" />
@@ -36,7 +36,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </NavLink>
         <span className="app-header__tagline">your word notebook</span>
       </header>
-      <main id="main-content" className="app-main">
+      <main
+        ref={mainRef}
+        id="main-content"
+        className="app-main"
+        tabIndex={-1}
+      >
         <UpdatePrompt />
         {children}
       </main>

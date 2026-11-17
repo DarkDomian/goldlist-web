@@ -67,8 +67,8 @@
 
 ## 9. Review Follow-up
 
-- [ ] 9.1 Restore the standard card body padding in preview cards and add a regression assertion for the computed spacing.
-- [ ] 9.2 Bump the package version to `0.1.1` and add a root `CHANGELOG.md` entry for the patch release.
+- [x] 9.1 Restore the standard card body padding in preview cards and add a regression assertion for the computed spacing.
+- [x] 9.2 Bump the package version to `0.1.1` and add a root `CHANGELOG.md` entry for the patch release.
 
 ## Workflow follow-up
 

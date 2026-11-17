@@ -52,7 +52,8 @@ describe("DistillationPage", () => {
     renderDistillation();
 
     expect(await screen.findByText("Recall the Russian")).toBeInTheDocument();
-    expect(screen.getByText("curious")).toBeInTheDocument();
+    const word = screen.getByRole("heading", { name: "curious" });
+    expect(word.closest("article")).toHaveClass("card--preview");
     expect(screen.queryByText("любопытный, интересующийся")).not.toBeInTheDocument();
   });
 

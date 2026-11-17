@@ -1,5 +1,11 @@
 import { createId } from "./ids";
-import { CardNotFoundError, DuplicateWordError } from "./errors";
+import {
+  CardNotFoundError,
+  DuplicateExampleError,
+  DuplicateWordError,
+  EmptyExampleError,
+  ExampleNotFoundError,
+} from "./errors";
 import type { GoldlistDatabase } from "./db";
 import { wordKey } from "@/domain/normalization";
 import { transitionCard } from "@/domain/transitions";
@@ -86,7 +92,7 @@ export async function getCardWithExamples(
   }
 
   const examples = await database.examples.where("cardId").equals(id).toArray();
-  return { ...card, examples };
+  return { ...card, examples: sortExamples(examples) };
 }
 
 export async function listCards(database: GoldlistDatabase): Promise<Card[]> {
@@ -108,7 +114,105 @@ export async function listCardsWithExamples(
     byCard.set(example.cardId, current);
   }
 
-  return cards.map((card) => ({ ...card, examples: byCard.get(card.id) ?? [] }));
+  return cards.map((card) => ({
+    ...card,
+    examples: sortExamples(byCard.get(card.id) ?? []),
+  }));
+}
+
+function exampleKey(text: string): string {
+  return text.trim().toLocaleLowerCase("en");
+}
+
+export function sortExamples<T extends Example>(examples: T[]): T[] {
+  return [...examples].sort((a, b) => {
+    if (a.source === b.source) {
+      return 0;
+    }
+    return a.source === "user" ? -1 : 1;
+  });
+}
+
+function normalizeCustomExample(text: string): string {
+  const normalized = text.trim();
+  if (!normalized) {
+    throw new EmptyExampleError();
+  }
+  return normalized;
+}
+
+function rejectDuplicate(examples: Example[], text: string, excludeId?: string): void {
+  const key = exampleKey(text);
+  if (
+    examples.some(
+      (example) => example.id !== excludeId && exampleKey(example.text) === key,
+    )
+  ) {
+    throw new DuplicateExampleError();
+  }
+}
+
+export async function addCustomExample(
+  database: GoldlistDatabase,
+  cardId: string,
+  text: string,
+): Promise<Example> {
+  const card = await database.cards.get(cardId);
+  if (!card) {
+    throw new CardNotFoundError();
+  }
+
+  const normalized = normalizeCustomExample(text);
+  const examples = await database.examples.where("cardId").equals(cardId).toArray();
+  rejectDuplicate(examples, normalized);
+
+  const example: Example = {
+    id: createId(),
+    cardId,
+    text: normalized,
+    source: "user",
+  };
+  await database.examples.add(example);
+  return example;
+}
+
+export async function updateCustomExample(
+  database: GoldlistDatabase,
+  exampleId: string,
+  text: string,
+): Promise<Example> {
+  const example = await database.examples.get(exampleId);
+  if (!example) {
+    throw new ExampleNotFoundError();
+  }
+  if (example.source !== "user") {
+    throw new Error("Only custom examples can be edited");
+  }
+
+  const normalized = normalizeCustomExample(text);
+  const siblings = await database.examples
+    .where("cardId")
+    .equals(example.cardId)
+    .toArray();
+  rejectDuplicate(siblings, normalized, example.id);
+
+  const next: Example = { ...example, text: normalized };
+  await database.examples.put(next);
+  return next;
+}
+
+export async function deleteCustomExample(
+  database: GoldlistDatabase,
+  exampleId: string,
+): Promise<void> {
+  const example = await database.examples.get(exampleId);
+  if (!example) {
+    throw new ExampleNotFoundError();
+  }
+  if (example.source !== "user") {
+    throw new Error("Only custom examples can be deleted");
+  }
+  await database.examples.delete(exampleId);
 }
 
 export async function updateCardTranslation(

@@ -11,11 +11,15 @@ Everything stays in the browser: no account and no application server.
 - English-language onboarding, Current Day, Distillation, Archive, Card detail, and Settings views.
 - Copper → silver → gold distillation stages with a 14-calendar-day freeze at local midnight.
 - Automatic English-to-Russian translation in a Web Worker, with WebGPU and WASM fallbacks.
-- Up to three Tatoeba example sentences per card, cached for offline use.
+- Up to three Tatoeba example sentences per card, cached for offline use. Examples can be selected automatically or chosen manually from candidates.
+- Custom examples can be added, edited, and deleted while creating a card or from card detail.
+- Fixed-height card previews fade only when content overflows; card detail keeps the full content.
 - Normalized answer checking with comma, semicolon, and slash translation variants.
 - Learned cards hide the Russian translation; missed gold cards become unlearned and leave rotation.
+- Compact archive chips for learned/unlearned words and metallic status chips for waiting cards.
 - Re-learn and cascading delete actions for archived cards.
-- IndexedDB persistence, light/dark themes, installable PWA, and offline app-shell support.
+- IndexedDB persistence, light/dark/system themes, installable PWA, and offline app-shell support.
+- Versioned JSON export and merge/replace import, with a backup download before replacing data.
 - A due-card badge and startup catch-up after the device has been asleep across midnight.
 
 ## Stack
@@ -33,7 +37,9 @@ npm run dev
 ```
 
 Open the URL printed by Vite. The first translation downloads the TranslateGemma model;
-later translations reuse the browser cache. Use Settings → Theme to switch light/dark.
+later translations reuse the browser cache. Use Settings → Theme to choose Light, Dark, or
+System; System follows your device preference and updates when it changes. Settings → Example
+selection switches between automatic and manual Tatoeba choices.
 
 ### Scripts
 
@@ -96,6 +102,9 @@ to WASM with `q4`. The model is loaded lazily on the first translation, not at a
 - The first translation can download hundreds of megabytes to a few gigabytes depending
   on the selected dtype and browser cache state. Show the progress bar and keep the tab open.
 - The model is cached by the browser after the first successful download.
+- One shared status bar reports queued, downloading, initializing, ready, and error states,
+  with the aggregate percentage above the bar and the current phase in the summary.
+- WebGPU load failures continue in the same status display while the worker switches to WASM.
 - A timeout or download/model failure switches the Add Card form to manual translation;
   the app remains usable without the model.
 - Model/dtype defaults live in `src/services/translation/worker.ts` and can be changed there.
@@ -110,7 +119,33 @@ to WASM with `q4`. The model is loaded lazily on the first translation, not at a
 - Tatoeba examples are cached in IndexedDB for 30 days. Requests time out and fail soft;
   a card can always be saved without examples.
 - The app requests persistent browser storage once on first launch. Denial is non-fatal.
-- Deleting browser site data removes all cards and settings; export is not part of this MVP.
+- Deleting browser site data removes all cards and settings; export a snapshot first from Settings → Your data.
+
+## Data portability
+
+Settings → Your data exports one JSON snapshot with settings, cards, examples, and
+distillation attempts. Tatoeba cache entries are excluded.
+
+```json
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-11-15T12:00:00.000Z",
+  "appVersion": "0.1.1",
+  "payload": {
+    "settings": {},
+    "cards": [],
+    "examples": [],
+    "attempts": []
+  }
+}
+```
+
+Import validates the full snapshot before changing data and shows record counts. Merge adds
+non-conflicting records and skips matching IDs or normalized words; imported settings apply
+only while the current settings are still defaults. Replace requires confirmation, downloads
+the current snapshot as a backup first, and then clears and writes settings, cards, examples,
+and attempts in one transaction. Older supported schema versions are migrated; newer versions
+are rejected.
 
 ## Tatoeba attribution
 
@@ -169,7 +204,7 @@ must not be used for a real deployment.
 - The language pair is fixed to Russian native speakers learning English.
 - Automatic translation depends on a large model download and a capable browser.
 - Tatoeba examples depend on a third-party API; offline cards may have no examples.
-- There is no account sync, import, or export in this MVP.
+- There is no account sync or server backup; snapshots are manual JSON files.
 - The GoldList method is a practical heuristic, not a clinically proven protocol.
 
 ## Manual checks

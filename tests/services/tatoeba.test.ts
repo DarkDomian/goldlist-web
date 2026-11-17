@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GoldlistDatabase } from "@/data/db";
-import { getExamples, selectExamples } from "@/services/tatoeba";
+import {
+  getExampleCandidates,
+  getExamples,
+  rankCandidates,
+  selectExamples,
+} from "@/services/tatoeba";
 import { makeTestDatabase } from "../helpers";
 
 let database: GoldlistDatabase;
@@ -37,6 +42,58 @@ describe("selectExamples", () => {
         "walk",
       ),
     ).toHaveLength(3);
+  });
+});
+
+describe("rankCandidates", () => {
+  it("ranks exact matches, then stems, then the remaining candidates", () => {
+    expect(
+      rankCandidates(
+        ["Another sentence.", "She walks daily.", "A walk in the park."],
+        "walk",
+      ),
+    ).toEqual(["A walk in the park.", "She walks daily.", "Another sentence."]);
+  });
+
+  it("deduplicates and caps the candidate set", () => {
+    const sentences = Array.from({ length: 20 }, (_, index) => `walk ${index}.`);
+    expect(rankCandidates([...sentences, "walk 0."], "walk")).toHaveLength(12);
+  });
+});
+
+describe("getExampleCandidates", () => {
+  it("caches a candidate set larger than the automatic selection", async () => {
+    const fetchImpl = vi.fn(async () =>
+      responseFor(["A curious cat.", "A curious dog.", "A curious bird.", "A curious fish."]),
+    );
+
+    const first = await getExampleCandidates("curious", { fetchImpl, database });
+    const second = await getExampleCandidates("curious", { fetchImpl, database });
+
+    expect(first).toHaveLength(4);
+    expect(second).toEqual(first);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect((await getExamples("curious", { fetchImpl, database }))).toHaveLength(3);
+  });
+
+  it("reuses stale candidates when offline", async () => {
+    const success = vi.fn(async () => responseFor(["A curious cat."]));
+    await getExampleCandidates("curious", {
+      fetchImpl: success,
+      database,
+      now: () => new Date(2026, 0, 1),
+    });
+
+    const offline = vi.fn(async () => {
+      throw new Error("offline");
+    });
+    await expect(
+      getExampleCandidates("curious", {
+        fetchImpl: offline,
+        database,
+        now: () => new Date(2026, 3, 1),
+      }),
+    ).resolves.toEqual([{ text: "A curious cat.", source: "tatoeba" }]);
   });
 });
 

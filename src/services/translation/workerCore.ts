@@ -1,4 +1,67 @@
+import type { TranslationStatus } from "./types";
+import { createProgressAggregator } from "./progress";
+
 export const TRANSLATION_MODEL_ID = "onnx-community/translategemma-text-4b-it-ONNX";
+
+export type TranslationDevice = "webgpu" | "wasm";
+
+export interface RawTranslationProgress {
+  status?: string;
+  file?: string;
+  name?: string;
+  loaded?: number;
+  total?: number;
+  progress?: number;
+}
+
+export async function loadTranslationModel<T>({
+  hasWebGpu,
+  load,
+  onStatus,
+}: {
+  hasWebGpu: boolean;
+  load: (
+    device: TranslationDevice,
+    onProgress: (progress: RawTranslationProgress) => void,
+  ) => Promise<T>;
+  onStatus: (status: TranslationStatus) => void;
+}): Promise<T> {
+  const aggregator = createProgressAggregator();
+  let lastProgress: number | undefined;
+
+  const report = (progress: RawTranslationProgress) => {
+    lastProgress = aggregator.update(progress.file ?? progress.name ?? "model", {
+      loaded: progress.loaded,
+      total: progress.total,
+      progress: progress.progress,
+    });
+    onStatus({
+      phase: "downloading",
+      progress: lastProgress,
+      message: progress.status ?? progress.file,
+    });
+  };
+
+  if (hasWebGpu) {
+    try {
+      const generator = await load("webgpu", report);
+      onStatus({ phase: "ready", progress: 100 });
+      return generator;
+    } catch {
+      onStatus({
+        phase: "initializing",
+        progress: lastProgress,
+        message: "WebGPU is unavailable. Falling back to WebAssembly.",
+      });
+    }
+  } else {
+    onStatus({ phase: "initializing", message: "Preparing WebAssembly." });
+  }
+
+  const generator = await load("wasm", report);
+  onStatus({ phase: "ready", progress: 100 });
+  return generator;
+}
 
 export interface ChatMessageContent {
   type: "text";

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AddCardButton } from "@/ui/AddCardButton";
@@ -31,7 +31,9 @@ describe("UI primitives", () => {
 
   it("renders a waiting card without content", () => {
     render(<WaitingCard status="silver" />);
-    expect(screen.getByRole("img", { name: "Waiting silver card" })).toBeInTheDocument();
+    const waiting = screen.getByRole("img", { name: "Waiting silver card" });
+    expect(waiting).toHaveClass("waiting-chip", "waiting-chip--silver");
+    expect(waiting).toHaveTextContent("Silver");
     expect(screen.queryByText("curious")).not.toBeInTheDocument();
   });
 
@@ -54,10 +56,91 @@ describe("UI primitives", () => {
     expect(screen.getByText("A curious cat.")).toBeInTheDocument();
   });
 
-  it("exposes the add card action", async () => {
+  it("orders user examples before Tatoeba examples", () => {
+    render(
+      <CardView
+        card={makeCard()}
+        examples={[
+          {
+            id: "example-1",
+            cardId: "card-1",
+            text: "A curious cat.",
+            source: "tatoeba",
+          },
+          {
+            id: "example-2",
+            cardId: "card-1",
+            text: "My own sentence.",
+            source: "user",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      "My own sentence.",
+      "A curious cat.",
+    ]);
+  });
+
+  it("uses a preview variant that fades only on overflow", async () => {
+    const { container } = render(
+      <CardView
+        card={makeCard()}
+        examples={[
+          {
+            id: "example-1",
+            cardId: "card-1",
+            text: "A curious cat.",
+            source: "tatoeba",
+          },
+        ]}
+        variant="preview"
+      />,
+    );
+    const content = container.querySelector<HTMLElement>(".card__content")!;
+    expect(content).toHaveClass("card__content--preview");
+
+    Object.defineProperty(content, "scrollHeight", {
+      configurable: true,
+      value: 220,
+    });
+    Object.defineProperty(content, "clientHeight", {
+      configurable: true,
+      value: 132,
+    });
+    window.dispatchEvent(new Event("resize"));
+    await waitFor(() =>
+      expect(content).toHaveClass("card__content--overflow"),
+    );
+    expect(screen.getByText("A curious cat.")).toBeInTheDocument();
+
+    Object.defineProperty(content, "scrollHeight", {
+      configurable: true,
+      value: 100,
+    });
+    window.dispatchEvent(new Event("resize"));
+    await waitFor(() =>
+      expect(content).not.toHaveClass("card__content--overflow"),
+    );
+  });
+
+  it("renders a full card without a preview height", () => {
+    const { container } = render(<CardView card={makeCard()} />);
+    expect(container.querySelector(".card__content")).not.toHaveClass(
+      "card__content--preview",
+    );
+  });
+
+  it("exposes the add card action with a vector icon", async () => {
     const onClick = vi.fn();
-    render(<AddCardButton onClick={onClick} />);
-    await userEvent.click(screen.getByRole("button", { name: "Add a word" }));
+    const { container } = render(<AddCardButton onClick={onClick} />);
+    const button = screen.getByRole("button", { name: "Add a word" });
+    expect(button.querySelector("svg")).toBeInTheDocument();
+    expect(container.querySelector(".card--add__plus")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    await userEvent.click(button);
     expect(onClick).toHaveBeenCalled();
   });
 

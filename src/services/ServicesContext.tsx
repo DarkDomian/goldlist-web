@@ -3,7 +3,7 @@ import type { GoldlistDatabase } from "@/data/db";
 import { db } from "@/data/db";
 import type { ExampleDraft } from "@/domain/types";
 import { AsyncMutex } from "./scheduler";
-import { getExamples } from "./tatoeba";
+import { getExampleCandidates } from "./tatoeba";
 import { WorkerTranslationService } from "./translation/client";
 import { FakeTranslationService } from "./translation/fake";
 import type { TranslationService } from "./translation/types";
@@ -24,7 +24,7 @@ export function createDefaultServices(): AppServices {
   return {
     database: db,
     translation,
-    examples: (word) => getExamples(word, { database: db }),
+    examples: (word) => getExampleCandidates(word, { database: db }),
     mutex: new AsyncMutex(),
   };
 }
